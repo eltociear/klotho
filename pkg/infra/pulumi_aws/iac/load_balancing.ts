@@ -1,22 +1,13 @@
-import { Region } from '@pulumi/aws'
 import * as aws from '@pulumi/aws'
-import * as awsx from '@pulumi/awsx'
-import * as k8s from '@pulumi/kubernetes'
-
-import * as pulumi from '@pulumi/pulumi'
-import * as sha256 from 'simple-sha256'
-import * as fs from 'fs'
-import * as requestRetry from 'requestretry'
-import * as crypto from 'crypto'
-
-import * as eks from '@pulumi/eks'
+import * as validators from './sanitization/aws/elb'
 import {
     ListenerArgs,
-    TargetGroupArgs,
     LoadBalancerArgs,
+    TargetGroupArgs,
     TargetGroupAttachmentArgs,
 } from '@pulumi/aws/lb'
 import { ListenerRuleArgs } from '@pulumi/aws/alb'
+import { h, sanitized } from './sanitization/sanitizer'
 
 export class LoadBalancerPlugin {
     // A map of all resources which are going to be fronted by a load balancer
@@ -32,10 +23,13 @@ export class LoadBalancerPlugin {
         params: LoadBalancerArgs
     ): aws.lb.LoadBalancer => {
         let lb: aws.lb.LoadBalancer
+        let lbName = sanitized(validators.loadBalancer.nameValidation())`${h(appName)}-${h(
+            resourceId
+        )}`
         switch (params.loadBalancerType) {
             case 'application':
                 lb = new aws.lb.LoadBalancer(`${appName}-${resourceId}-alb`, {
-                    name: `${appName}-${resourceId}`,
+                    name: lbName,
                     internal: params.internal || false,
                     loadBalancerType: 'application',
                     securityGroups: params.securityGroups,
@@ -46,7 +40,7 @@ export class LoadBalancerPlugin {
                 break
             case 'network':
                 lb = new aws.lb.LoadBalancer(`${appName}-${resourceId}-nlb`, {
-                    name: `${appName}-${resourceId}`,
+                    name: lbName,
                     internal: params.internal || true,
                     loadBalancerType: 'network',
                     subnets: params.subnets,
@@ -93,13 +87,16 @@ export class LoadBalancerPlugin {
         params: TargetGroupArgs
     ): aws.lb.TargetGroup => {
         let targetGroup: aws.lb.TargetGroup
+        let tgName = sanitized(validators.targetGroup.nameValidation())`${h(appName)}-${h(
+            resourceId
+        )}`
         if (params.targetType != 'lambda' && !(params.port && params.protocol)) {
             throw new Error('Port and Protocol must be specified for non lambda target types')
         }
         switch (params.targetType) {
             case 'ip':
                 targetGroup = new aws.lb.TargetGroup(`${appName}-${resourceId}-targetGroup`, {
-                    name: `${appName}-${resourceId}`,
+                    name: tgName,
                     port: params.port,
                     protocol: params.protocol,
                     targetType: 'ip',
@@ -109,7 +106,7 @@ export class LoadBalancerPlugin {
                 break
             case 'instance':
                 targetGroup = new aws.lb.TargetGroup(`${appName}-${resourceId}-targetGroup`, {
-                    name: `${appName}-${resourceId}`,
+                    name: tgName,
                     port: params.port,
                     protocol: params.protocol,
                     vpcId: params.vpcId,
@@ -118,7 +115,7 @@ export class LoadBalancerPlugin {
                 break
             case 'alb':
                 targetGroup = new aws.lb.TargetGroup(`${appName}-${resourceId}-targetGroup`, {
-                    name: `${appName}-${resourceId}`,
+                    name: tgName,
                     targetType: 'alb',
                     port: params.port,
                     protocol: params.protocol,
@@ -129,7 +126,7 @@ export class LoadBalancerPlugin {
                 break
             case 'lambda':
                 targetGroup = new aws.lb.TargetGroup(`${appName}-${resourceId}-targetGroup`, {
-                    name: `${appName}-${resourceId}`,
+                    name: tgName,
                     targetType: 'lambda',
                     tags: params.tags,
                 })

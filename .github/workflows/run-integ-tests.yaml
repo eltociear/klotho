@@ -60,6 +60,11 @@ on:
         required: false
         type: string
         default: us-east-2
+      pre-build-script-path: # This one is NOT in workflow_dispatch
+        description: path to a script (within the caller's repo) to invoke before `go build`. must be executable.
+        required: false
+        type: string
+        default: ''
 concurrency: integ-tests
 name: run integration tests
 jobs:
@@ -111,6 +116,9 @@ jobs:
       - uses: actions/setup-go@v3
         with:
           go-version: 1.19.x
+      - name: pre-build
+        run: ${{ inputs.pre-build-script-path }}
+        if: ${{ inputs.pre-build-script-path }}
       - name: build
         run: |
           go generate ./...
